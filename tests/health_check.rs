@@ -1,16 +1,21 @@
-fn spawn_app() {
-    let server = newsletter::run().expect("Fail to bind address");
+use std::net::TcpListener;
+
+fn spawn_app() -> String {
+    let listener = TcpListener::bind("localhost:0").expect("Failed to bind random port.");
+    let port = listener.local_addr().unwrap().port();
+    let server = newsletter::run(listener).expect("Fail to bind address");
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(server);
+    format!("http://localhost:{port}")
 }
 
 #[tokio::test]
 async fn health_check_works() {
-    spawn_app();
+    let address = spawn_app();
     let client = reqwest::Client::new();
 
     let response = client
-        .get("http://localhost:8000/health_check")
+        .get(&format!("{address}/health_check"))
         .send()
         .await
         .expect("Failed to execute request.");
