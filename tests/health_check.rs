@@ -3,7 +3,7 @@ use std::net::TcpListener;
 fn spawn_app() -> String {
     let listener = TcpListener::bind("localhost:0").expect("Failed to bind random port.");
     let port = listener.local_addr().unwrap().port();
-    let server = newsletter::run(listener).expect("Fail to bind address");
+    let server = newsletter::startup::run(listener).expect("Fail to bind address");
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(server);
     format!("http://localhost:{port}")
