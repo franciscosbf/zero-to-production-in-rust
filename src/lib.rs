@@ -4,6 +4,7 @@ use actix_web::dev::Server;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)] // TODO: remove
 struct FormData {
     email: String,
     name: String,
