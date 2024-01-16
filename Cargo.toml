@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "newsletter"
 
 [dependencies]
+tracing-log = "0.2"
+tracing-bunyan-formatter = "0.3"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
+tracing = { version = "0.1", features = ["log"] }
 config = "0.13"
 actix-web = "4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
