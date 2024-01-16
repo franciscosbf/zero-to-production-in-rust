@@ -38,7 +38,6 @@ pub async fn insert_susbscriber(pool: &PgPool, form: &FormData) -> Result<(), sq
     name = "Adding a new susbscriber",
     skip(form, pool),
     fields(
-        request_id = %Uuid::new_v4(),
         susbscriber_email = %form.email,
         susbscriber_name = %form.name
     )
