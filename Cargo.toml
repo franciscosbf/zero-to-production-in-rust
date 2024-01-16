@@ -11,6 +11,7 @@ path = "src/main.rs"
 name = "newsletter"
 
 [dependencies]
+secrecy = { version = "0.8", features = ["serde"] }
 tracing-log = "0.2"
 tracing-bunyan-formatter = "0.3"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
@@ -35,4 +36,5 @@ features = [
 ]
 
 [dev-dependencies]
+once_cell = "1"
 reqwest = "0.11"
