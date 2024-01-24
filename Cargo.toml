@@ -10,6 +10,10 @@ path = "src/lib.rs"
 path = "src/main.rs"
 name = "newsletter"
 
+[profile.release]
+strip = true
+lto = true
+
 [dependencies]
 tracing-actix-web = "0.7"
 secrecy = { version = "0.8", features = ["serde"] }
