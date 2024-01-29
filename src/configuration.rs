@@ -14,7 +14,7 @@ pub struct ApplicationSettings {
 
 impl ApplicationSettings {
     pub fn address(&self) -> String {
-        format!("{}{}", self.host, self.port)
+        format!("{}:{}", self.host, self.port)
     }
 }
 
