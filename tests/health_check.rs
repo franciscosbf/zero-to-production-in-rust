@@ -48,11 +48,13 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
 async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("localhost:0").expect("Failed to bind random port.");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://localhost:{port}");
-
     let mut configuration = get_configuration().expect("Failed to read configuration.");
+
+    let host = configuration.application.host;
+    let listener = TcpListener::bind(format!("{host}:0")).expect("Failed to bind random port.");
+    let port = listener.local_addr().unwrap().port();
+    let address = format!("http://{host}:{port}");
+
     configuration.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&configuration.database).await;
 
