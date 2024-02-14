@@ -33,7 +33,7 @@ serde-aux = "4"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 unicode-segmentation = "1"
-validator = "0.16.1"
+validator = { version = "0.16.1", default-features = false }
 
 [dependencies.sqlx]
 version = "0.7"
