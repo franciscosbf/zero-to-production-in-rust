@@ -2,6 +2,7 @@ use std::net::TcpListener;
 
 use newsletter::{
     configuration::{get_configuration, DatabaseSettings},
+    email_client::EmailClient,
     telemetry::{get_subscriber, init_subscriber},
 };
 use once_cell::sync::Lazy;
@@ -56,8 +57,22 @@ async fn spawn_app() -> TestApp {
     configuration.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&configuration.database).await;
 
-    let server =
-        newsletter::startup::run(listener, connection_pool.clone()).expect("Fail to bind address");
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let base_url = configuration
+        .email_client
+        .url()
+        .expect("Invalid email base url.");
+    let email_client = EmailClient::new(
+        base_url,
+        sender_email,
+        configuration.email_client.authorization_token,
+    );
+
+    let server = newsletter::startup::run(listener, connection_pool.clone(), email_client)
+        .expect("Fail to bind address");
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(server);
 
