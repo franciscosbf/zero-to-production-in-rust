@@ -65,10 +65,12 @@ async fn spawn_app() -> TestApp {
         .email_client
         .url()
         .expect("Invalid email base url.");
+    let timeout = configuration.email_client.timeout();
     let email_client = EmailClient::new(
         base_url,
         sender_email,
         configuration.email_client.authorization_token,
+        timeout,
     );
 
     let server = newsletter::startup::run(listener, connection_pool.clone(), email_client)
