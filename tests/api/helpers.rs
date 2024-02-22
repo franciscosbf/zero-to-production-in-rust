@@ -1,8 +1,6 @@
-use std::net::TcpListener;
-
 use newsletter::{
     configuration::{get_configuration, DatabaseSettings},
-    email_client::EmailClient,
+    startup::{get_connection_pool, Application},
     telemetry::{get_subscriber, init_subscriber},
 };
 use once_cell::sync::Lazy;
@@ -47,39 +45,26 @@ pub struct TestApp {
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let mut configuration = get_configuration().expect("Failed to read configuration.");
+    let configuration = {
+        let mut c = get_configuration().expect("Failed to read configuration.");
+        c.database.database_name = Uuid::new_v4().to_string();
+        c.application.port = 0;
 
-    let host = configuration.application.host;
-    let listener = TcpListener::bind(format!("{host}:0")).expect("Failed to bind random port.");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://{host}:{port}");
+        c
+    };
 
-    configuration.database.database_name = Uuid::new_v4().to_string();
-    let connection_pool = configure_database(&configuration.database).await;
+    configure_database(&configuration.database).await;
 
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address.");
-    let base_url = configuration
-        .email_client
-        .url()
-        .expect("Invalid email base url.");
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        base_url,
-        sender_email,
-        configuration.email_client.authorization_token,
-        timeout,
-    );
+    let application = Application::build(configuration.clone())
+        .await
+        .expect("Fail to build application");
+    let address = format!("http://127.0.0.1:{}", application.port());
 
-    let server = newsletter::startup::run(listener, connection_pool.clone(), email_client)
-        .expect("Fail to bind address");
     #[allow(clippy::let_underscore_future)]
-    let _ = tokio::spawn(server);
+    let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
-        db_pool: connection_pool,
+        db_pool: get_connection_pool(&configuration.database),
     }
 }
