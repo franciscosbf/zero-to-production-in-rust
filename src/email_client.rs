@@ -74,7 +74,7 @@ impl EmailClient {
 
 #[cfg(test)]
 mod test {
-    use claim::{assert_err, assert_ok};
+    use claims::{assert_err, assert_ok};
     use fake::faker::lorem::en::Sentence;
     use fake::Faker;
     use fake::{faker::internet::en::SafeEmail, Fake};
