@@ -40,4 +40,4 @@ COPY configuration configuration
 
 ENV APP_ENVIRONMENT=production
 
-ENTRYPOINT ["./target/release/newsletter"]
+ENTRYPOINT ["./newsletter"]
