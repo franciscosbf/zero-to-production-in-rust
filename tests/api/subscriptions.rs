@@ -119,3 +119,27 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
 
     assert_eq!(confirmation_link.html, confirmation_link.plain_text);
 }
+
+#[tokio::test]
+async fn subscribe_sends_new_confirmation_email_when_subscriber_is_repeated() {
+    let test_app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+
+    test_app.post_subscription(body.into()).await;
+
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
+    let first_confirmation_link = test_app.get_confirmation_links(email_request);
+
+    test_app.post_subscription(body.into()).await;
+
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[1];
+    let second_confirmation_link = test_app.get_confirmation_links(email_request);
+
+    assert_eq!(first_confirmation_link.html, second_confirmation_link.html);
+}
