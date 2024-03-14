@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT subscriber_id from subscription_tokens WHERE subscription_token = $1",
+  "query": "\n        DELETE from subscription_tokens\n        WHERE subscription_token = $1\n        RETURNING subscriber_id\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "3db2f41eb04c91097c76127da061bfa7bd76a30e0e97a2a123230963072bda5d"
+  "hash": "c6f2f9eb44bc4a37ded81dc05fb251827709d2458172cfacaa3e49e2f2cc94cb"
 }

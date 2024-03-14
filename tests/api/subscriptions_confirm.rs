@@ -1,3 +1,4 @@
+use claims::assert_none;
 use wiremock::{
     matchers::{method, path},
     Mock, ResponseTemplate,
@@ -91,4 +92,75 @@ async fn subscribe_returns_a_406_when_trying_to_subscribe_with_an_already_confir
     let response = test_app.post_subscription(body.into()).await;
 
     assert_eq!(response.status().as_u16(), 406);
+}
+
+#[tokio::test]
+// async fn clicking_on_the_confirmation_link_more_than_once_returns_401() {
+async fn clicking_on_the_confirmation_link_removes_subscription_token() {
+    let test_app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+
+    test_app.post_subscription(body.into()).await;
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_link = test_app.get_confirmation_links(email_request);
+
+    reqwest::get(confirmation_link.html.clone())
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+
+    let subscription_token = confirmation_link
+        .html
+        .query()
+        .unwrap()
+        .split('=')
+        .nth(1)
+        .unwrap();
+
+    let saved = sqlx::query!(
+        r#"
+        SELECT *
+        FROM subscription_tokens
+        WHERE subscription_token = $1
+        "#,
+        subscription_token
+    )
+    .fetch_optional(&test_app.db_pool)
+    .await
+    .expect("Failed to fetch saved subscriptions");
+
+    assert_none!(saved);
+}
+
+#[tokio::test]
+async fn clicking_on_the_confirmation_link_more_than_once_returns_401() {
+    let test_app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+
+    test_app.post_subscription(body.into()).await;
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_link = test_app.get_confirmation_links(email_request);
+
+    reqwest::get(confirmation_link.html.clone())
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+
+    let result = reqwest::get(confirmation_link.plain_text).await.unwrap();
+
+    assert_eq!(result.status().as_u16(), 401);
 }
