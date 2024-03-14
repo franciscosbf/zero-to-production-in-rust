@@ -35,6 +35,7 @@ RUN apt-get update -y \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/newsletter newsletter
+COPY --from=builder /app/templates templates
 
 COPY configuration configuration
 

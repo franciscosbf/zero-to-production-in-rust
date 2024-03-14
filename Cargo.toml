@@ -32,6 +32,8 @@ unicode-segmentation = "1"
 validator = { version = "0.16.1", default-features = false }
 url = "2.5"
 rand = { version = "0.8.5", features = ["std_rng"] }
+tera = "1"
+lazy_static = "1.4.0"
 
 [dependencies.sqlx]
 version = "0.7"

@@ -8,6 +8,7 @@ use crate::{
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
     email_client::EmailClient,
     startup::ApplicationBaseUrl,
+    template::{self, render_subscription_confirmation},
 };
 
 #[derive(serde::Deserialize)]
@@ -135,37 +136,39 @@ pub async fn get_subscriber_confirmation_token(
 }
 
 #[tracing::instrument(
-    name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber)
+    name = "Render subscription confirmation message",
+    skip(base_url, subscription_token)
 )]
-pub async fn send_confirmation_email(
-    email_client: &EmailClient,
-    new_subscriber: NewSubscriber,
+fn build_confirmation_email_template(
     base_url: &str,
     subscription_token: &str,
-) -> Result<(), reqwest::Error> {
+) -> Result<template::SubcriptionConfirmation, tera::Error> {
     let confirmation_link = format!(
         "{}/subscriptions/confirm?subscription_token={}",
         base_url, subscription_token,
     );
-    let html_content = format!(
-        "Welcome to our newsletter!<br/>\
-                Click <a href=\"{}\">here<a/> to confirm your subscription.",
-        confirmation_link
-    );
 
-    let text_content = format!(
-        "Welcome to our newsletter!\n\
-                Visit {} to confirm your subscription.",
-        confirmation_link
-    );
+    render_subscription_confirmation(&confirmation_link).map_err(|e| {
+        tracing::error!("Failed to render subscription confirmation: {:?}", e);
+        e
+    })
+}
 
+#[tracing::instrument(
+    name = "Send a confirmation email to a new subscriber",
+    skip(email_client, new_subscriber, template)
+)]
+pub async fn send_confirmation_email(
+    email_client: &EmailClient,
+    new_subscriber: NewSubscriber,
+    template: template::SubcriptionConfirmation,
+) -> Result<(), reqwest::Error> {
     email_client
         .send_email(
             new_subscriber.email,
             "Welcome!",
-            &html_content,
-            &text_content,
+            &template.html,
+            &template.text,
         )
         .await
 }
@@ -221,14 +224,14 @@ pub async fn subscribe(
         }
     };
 
-    if send_confirmation_email(
-        &email_client,
-        new_subscriber,
-        &base_url.0,
-        &subscription_token,
-    )
-    .await
-    .is_err()
+    let template = match build_confirmation_email_template(&base_url.0, &subscription_token) {
+        Ok(template) => template,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
+
+    if send_confirmation_email(&email_client, new_subscriber, template)
+        .await
+        .is_err()
     {
         return HttpResponse::InternalServerError().finish();
     }
