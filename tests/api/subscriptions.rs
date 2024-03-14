@@ -67,7 +67,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 }
 
 #[tokio::test]
-async fn subscribe_returns_a_200_when_are_present_but_missing() {
+async fn subscribe_returns_a_400_when_are_present_but_missing() {
     let test_app = spawn_app().await;
     let test_cases = vec![
         ("name=&email=ursula_le_guin%40gmail.com", "empty name"),

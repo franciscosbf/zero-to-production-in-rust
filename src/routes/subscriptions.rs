@@ -199,8 +199,6 @@ pub async fn subscribe(
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
-    // println!("{:?}", subscription_state);
-
     let subscription_token = match subscription_state {
         SubscriptionState::Confirmed => return HttpResponse::NotAcceptable().finish(),
         SubscriptionState::Inserted(subscriber_id) => {

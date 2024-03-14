@@ -83,7 +83,7 @@ async fn subscribe_returns_a_406_when_trying_to_subscribe_with_an_already_confir
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
     let confirmation_link = test_app.get_confirmation_links(email_request);
 
-    reqwest::get(confirmation_link.html.clone())
+    reqwest::get(confirmation_link.html)
         .await
         .unwrap()
         .error_for_status()
@@ -163,4 +163,27 @@ async fn clicking_on_the_confirmation_link_more_than_once_returns_401() {
     let result = reqwest::get(confirmation_link.plain_text).await.unwrap();
 
     assert_eq!(result.status().as_u16(), 401);
+}
+
+#[tokio::test]
+async fn confirm_returns_a_400_when_token_is_invalid() {
+    let test_app = spawn_app().await;
+    let query_token = "token=\"@#$$&/\\".to_string();
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+
+    test_app.post_subscription(body.into()).await;
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
+    let mut confirmation_link = test_app.get_confirmation_links(email_request);
+
+    confirmation_link.html.set_query(Some(&query_token));
+
+    let result = reqwest::get(confirmation_link.html).await.unwrap();
+
+    assert_eq!(result.status().as_u16(), 400);
 }
