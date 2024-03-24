@@ -1,4 +1,5 @@
 use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::Context;
 use chrono::Utc;
 use rand::{thread_rng, Rng};
 use reqwest::StatusCode;
@@ -56,20 +57,10 @@ impl actix_web::ResponseError for StoreTokenError {}
 pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(String),
-    #[error("Failed to acquire a Postgres connectiion from the pool")]
-    PoolError(#[source] sqlx::Error),
-    #[error("Failed to store the confirmation token for a new subscriber")]
-    StoreTokenError(#[from] StoreTokenError),
-    #[error("Failed to send confirmation email")]
-    SendEmailError(#[from] reqwest::Error),
-    #[error("Failed to insert new subscriber in the database")]
-    InsertSubscriberError(#[source] sqlx::Error),
-    #[error("Failed to commit SQL transaction to store a new subscriber")]
-    TransactionCommitError(#[source] sqlx::Error),
-    #[error("Failed to get confirmation token from subscriber")]
-    GetTokenError(#[source] sqlx::Error),
-    #[error("Subscriber is already registered")]
-    RepeatedSubscriberError,
+    #[error("Duplicated subscriber")]
+    DuplicatedSubscriber,
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 impl std::fmt::Debug for SubscribeError {
@@ -82,13 +73,8 @@ impl ResponseError for SubscribeError {
     fn status_code(&self) -> reqwest::StatusCode {
         match self {
             SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::RepeatedSubscriberError => StatusCode::NOT_ACCEPTABLE,
-            SubscribeError::StoreTokenError(_)
-            | SubscribeError::SendEmailError(_)
-            | SubscribeError::PoolError(_)
-            | SubscribeError::InsertSubscriberError(_)
-            | SubscribeError::TransactionCommitError(_)
-            | SubscribeError::GetTokenError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SubscribeError::DuplicatedSubscriber => StatusCode::NOT_ACCEPTABLE,
+            SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -136,11 +122,7 @@ pub async fn store_token(
     )
     .execute(&mut **transaction)
     .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-
-        StoreTokenError(e)
-    })?;
+    .map_err(StoreTokenError)?;
 
     Ok(())
 }
@@ -176,11 +158,7 @@ pub async fn insert_susbscriber(
         Utc::now()
     )
     .fetch_one(&mut **transaction)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
 
     let status = if subscriber_id == result.id {
         SubscriptionState::Inserted(subscriber_id)
@@ -212,10 +190,6 @@ pub async fn get_subscriber_confirmation_token(
     .fetch_one(&mut **transaction)
     .await
     .map(|result| result.subscription_token)
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })
 }
 
 #[tracing::instrument(
@@ -231,10 +205,7 @@ fn build_confirmation_email_template(
         base_url, subscription_token,
     );
 
-    render_subscription_confirmation(&confirmation_link).map_err(|e| {
-        tracing::error!("Failed to render subscription confirmation: {:?}", e);
-        e
-    })
+    render_subscription_confirmation(&confirmation_link)
 }
 
 #[tracing::instrument(
@@ -269,46 +240,46 @@ pub async fn subscribe(
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
-) -> Result<HttpResponse, actix_web::Error> {
+) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = form.0.try_into().map_err(SubscribeError::ValidationError)?;
 
     let mut transaction = pool
         .begin()
         .await
-        .map_err(SubscribeError::TransactionCommitError)?;
+        .context("Failed to aquire a Postgres connection from the pool")?;
 
     let subscription_state = insert_susbscriber(&mut transaction, &new_subscriber)
         .await
-        .map_err(SubscribeError::InsertSubscriberError)?;
+        .context("Failed to insert new subscriber in the database")?;
 
     let subscription_token = match subscription_state {
-        SubscriptionState::Confirmed => Err(SubscribeError::RepeatedSubscriberError)?,
+        SubscriptionState::Confirmed => Err(SubscribeError::DuplicatedSubscriber)?,
         SubscriptionState::Inserted(subscriber_id) => {
             let subscription_token = generate_subscription_token();
 
-            store_token(&mut transaction, subscriber_id, &subscription_token).await?;
+            store_token(&mut transaction, subscriber_id, &subscription_token)
+                .await
+                .context("Failed to store the confirmation token for a new subscriber")?;
 
             subscription_token
         }
         SubscriptionState::Pending(subscriber_id) => {
             get_subscriber_confirmation_token(&mut transaction, subscriber_id)
                 .await
-                .map_err(SubscribeError::GetTokenError)?
+                .context("Failed to retrieve subscriber confirmation token")?
         }
     };
-
-    let template = match build_confirmation_email_template(&base_url.0, &subscription_token) {
-        Ok(template) => template,
-        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
-    };
-    send_confirmation_email(&email_client, new_subscriber, template)
-        .await
-        .map_err(SubscribeError::SendEmailError)?;
 
     transaction
         .commit()
         .await
-        .map_err(SubscribeError::TransactionCommitError)?;
+        .context("Failed to commit SQL transaction to store new subscriber")?;
+
+    let template = build_confirmation_email_template(&base_url.0, &subscription_token)
+        .context("Failed to generate email template for confirmation email")?;
+    send_confirmation_email(&email_client, new_subscriber, template)
+        .await
+        .context("Failed to send confirmation email")?;
 
     Ok(HttpResponse::Ok().finish())
 }
