@@ -3,7 +3,7 @@ use serde_aux::prelude::deserialize_number_from_string;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use sqlx::ConnectOptions;
 
-use crate::domain::SubscriberEmail;
+use crate::domain::{SubscriberEmail, SubscriberEmailError};
 
 #[derive(Clone, serde::Deserialize)]
 pub struct Settings {
@@ -68,7 +68,7 @@ pub struct EmailClientSettings {
 }
 
 impl EmailClientSettings {
-    pub fn sender(&self) -> Result<SubscriberEmail, String> {
+    pub fn sender(&self) -> Result<SubscriberEmail, SubscriberEmailError> {
         SubscriberEmail::parse(self.sender_email.clone())
     }
 

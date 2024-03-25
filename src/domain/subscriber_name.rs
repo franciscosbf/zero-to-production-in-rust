@@ -1,24 +1,39 @@
 use unicode_segmentation::UnicodeSegmentation;
 
+#[derive(Debug, thiserror::Error)]
+pub enum SubscriberNameError {
+    #[error("Name is empty")]
+    Empty,
+    #[error("Name is too long")]
+    TooLong,
+    #[error("Name contains invalid characters")]
+    InvalidCharacters,
+}
+
 #[derive(Debug)]
 pub struct SubscriberName(String);
 
 const FORBIDDEN_CHARS: &[char] = &['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
 
 impl SubscriberName {
-    pub fn parse(s: String) -> Result<SubscriberName, String> {
+    pub fn parse(s: String) -> Result<SubscriberName, SubscriberNameError> {
         let is_empty_or_whitespace = s.trim().is_empty();
+        if is_empty_or_whitespace {
+            return Err(SubscriberNameError::Empty);
+        }
 
         // s must be less than 256 grapheme clusters.
         let is_too_long = s.graphemes(true).nth(256).is_some();
+        if is_too_long {
+            return Err(SubscriberNameError::TooLong);
+        }
 
         let contains_forbidden_chars = s.chars().any(|g| FORBIDDEN_CHARS.contains(&g));
-
-        if is_empty_or_whitespace || is_too_long || contains_forbidden_chars {
-            Err(format!("{} is not a valid subscriber name", s))
-        } else {
-            Ok(Self(s))
+        if contains_forbidden_chars {
+            return Err(SubscriberNameError::InvalidCharacters)?;
         }
+
+        Ok(Self(s))
     }
 }
 

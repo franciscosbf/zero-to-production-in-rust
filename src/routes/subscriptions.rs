@@ -7,7 +7,9 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+    domain::{
+        NewSubscriber, SubscriberEmail, SubscriberEmailError, SubscriberName, SubscriberNameError,
+    },
     email_client::EmailClient,
     startup::ApplicationBaseUrl,
     template::{self, render_subscription_confirmation},
@@ -54,9 +56,23 @@ impl std::fmt::Debug for StoreTokenError {
 impl actix_web::ResponseError for StoreTokenError {}
 
 #[derive(thiserror::Error)]
+pub enum ParseError {
+    #[error(transparent)]
+    InvalidName(SubscriberNameError),
+    #[error(transparent)]
+    InvalidEmail(SubscriberEmailError),
+}
+
+impl std::fmt::Debug for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+#[derive(thiserror::Error)]
 pub enum SubscribeError {
     #[error("{0}")]
-    ValidationError(String),
+    ValidationError(ParseError),
     #[error("Duplicated subscriber")]
     DuplicatedSubscriber,
     #[error(transparent)]
@@ -86,11 +102,11 @@ pub struct FormData {
 }
 
 impl TryFrom<FormData> for NewSubscriber {
-    type Error = String;
+    type Error = ParseError;
 
     fn try_from(value: FormData) -> Result<Self, Self::Error> {
-        let email = SubscriberEmail::parse(value.email)?;
-        let name = SubscriberName::parse(value.name)?;
+        let email = SubscriberEmail::parse(value.email).map_err(ParseError::InvalidEmail)?;
+        let name = SubscriberName::parse(value.name).map_err(ParseError::InvalidName)?;
 
         Ok(NewSubscriber { email, name })
     }
