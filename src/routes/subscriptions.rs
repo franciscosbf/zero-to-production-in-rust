@@ -15,20 +15,7 @@ use crate::{
     template::{self, render_subscription_confirmation},
 };
 
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}", e)?;
-
-    let mut current = e.source();
-    while let Some(cause) = current {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current = cause.source();
-    }
-
-    Ok(())
-}
+use super::error_chain_fmt;
 
 pub struct StoreTokenError(sqlx::Error);
 
@@ -74,7 +61,7 @@ pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(ParseError),
     #[error("Duplicated subscriber")]
-    DuplicatedSubscriber,
+    DuplicatedSubscriberError,
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
 }
@@ -89,7 +76,7 @@ impl ResponseError for SubscribeError {
     fn status_code(&self) -> reqwest::StatusCode {
         match self {
             SubscribeError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscribeError::DuplicatedSubscriber => StatusCode::NOT_ACCEPTABLE,
+            SubscribeError::DuplicatedSubscriberError => StatusCode::NOT_ACCEPTABLE,
             SubscribeError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -269,7 +256,7 @@ pub async fn subscribe(
         .context("Failed to insert new subscriber in the database")?;
 
     let subscription_token = match subscription_state {
-        SubscriptionState::Confirmed => Err(SubscribeError::DuplicatedSubscriber)?,
+        SubscriptionState::Confirmed => Err(SubscribeError::DuplicatedSubscriberError)?,
         SubscriptionState::Inserted(subscriber_id) => {
             let subscription_token = generate_subscription_token();
 

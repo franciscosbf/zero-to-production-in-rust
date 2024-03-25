@@ -1,8 +1,12 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::Context;
+use reqwest::StatusCode;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::domain::SubscriptionToken;
+use crate::domain::{SubscriptionToken, SubscriptionTokenError};
+
+use super::error_chain_fmt;
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {
@@ -10,18 +14,44 @@ pub struct Parameters {
 }
 
 impl TryFrom<Parameters> for SubscriptionToken {
-    type Error = String;
+    type Error = SubscriptionTokenError;
 
     fn try_from(value: Parameters) -> Result<Self, Self::Error> {
         SubscriptionToken::parse(value.subscription_token)
     }
 }
 
+#[derive(thiserror::Error)]
+pub enum SubscriptionConfirmationError {
+    #[error("{0}")]
+    ValidationError(SubscriptionTokenError),
+    #[error("Confirmation not authorized")]
+    MissingConfirmationError,
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
+}
+
+impl std::fmt::Debug for SubscriptionConfirmationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+impl ResponseError for SubscriptionConfirmationError {
+    fn status_code(&self) -> reqwest::StatusCode {
+        match self {
+            SubscriptionConfirmationError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            SubscriptionConfirmationError::MissingConfirmationError => StatusCode::UNAUTHORIZED,
+            SubscriptionConfirmationError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
 #[tracing::instrument(
-    name = "Get subscriber_id from token",
+    name = "Delete possible pending subscriber confirmation",
     skip(transaction, subscription_token)
 )]
-pub async fn get_subscriber_id_from_token(
+pub async fn delete_possible_pending_subscriber_confirmation(
     transaction: &mut Transaction<'_, Postgres>,
     subscription_token: SubscriptionToken,
 ) -> Result<Option<Uuid>, sqlx::Error> {
@@ -34,11 +64,7 @@ pub async fn get_subscriber_id_from_token(
         subscription_token.as_ref()
     )
     .fetch_optional(&mut **transaction)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
 
     Ok(result.map(|r| r.subscriber_id))
 }
@@ -60,47 +86,40 @@ pub async fn confirm_subscriber(
         &subscriber_id
     )
     .execute(&mut **transaction)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
 
     Ok(())
 }
 
 #[tracing::instrument(name = "Confirm pending subscriber", skip(parameters, pool))]
-pub async fn confirm(parameters: web::Query<Parameters>, pool: web::Data<PgPool>) -> HttpResponse {
-    let subscription_token = match parameters.0.try_into() {
-        Ok(subscription_token) => subscription_token,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
+pub async fn confirm(
+    parameters: web::Query<Parameters>,
+    pool: web::Data<PgPool>,
+) -> Result<HttpResponse, SubscriptionConfirmationError> {
+    let subscription_token = parameters
+        .0
+        .try_into()
+        .map_err(SubscriptionConfirmationError::ValidationError)?;
 
-    let mut transaction = match pool.begin().await {
-        Ok(transaction) => transaction,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
-
-    let id = match get_subscriber_id_from_token(&mut transaction, subscription_token).await {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
-
-    let subscriber_id = match id {
-        None => return HttpResponse::Unauthorized().finish(),
-        Some(subscriber_id) => subscriber_id,
-    };
-
-    if confirm_subscriber(&mut transaction, subscriber_id)
+    let mut transaction = pool
+        .begin()
         .await
-        .is_err()
-    {
-        return HttpResponse::InternalServerError().finish();
-    }
+        .context("Failed to aquire a Postgres connection from the pool")?;
 
-    if transaction.commit().await.is_err() {
-        return HttpResponse::InternalServerError().finish();
-    }
+    let subscriber_id =
+        delete_possible_pending_subscriber_confirmation(&mut transaction, subscription_token)
+            .await
+            .context("Failed to delete possible pending subscriber confirmation")?
+            .ok_or(SubscriptionConfirmationError::MissingConfirmationError)?;
 
-    HttpResponse::Ok().finish()
+    confirm_subscriber(&mut transaction, subscriber_id)
+        .await
+        .context("Failed to confirm new subscriber")?;
+
+    transaction
+        .commit()
+        .await
+        .context("Failed to commit SQL transaction to store new subscriber")?;
+
+    Ok(HttpResponse::Ok().finish())
 }

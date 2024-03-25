@@ -1,8 +1,12 @@
+#[derive(Debug, thiserror::Error)]
+#[error("{0} is not a valid subscriber token")]
+pub struct SubscriptionTokenError(String);
+
 #[derive(Debug)]
 pub struct SubscriptionToken(String);
 
 impl SubscriptionToken {
-    pub fn parse(s: String) -> Result<SubscriptionToken, String> {
+    pub fn parse(s: String) -> Result<SubscriptionToken, SubscriptionTokenError> {
         let is_empty_or_whitespace = s.trim().is_empty();
 
         let has_invalid_size = s.len() != 30;
@@ -10,7 +14,7 @@ impl SubscriptionToken {
         let contains_forbidden_chars = s.chars().any(|c| !c.is_ascii_alphanumeric());
 
         if is_empty_or_whitespace || has_invalid_size || contains_forbidden_chars {
-            Err(format!("{} is not a valid subscriber token", s))
+            Err(SubscriptionTokenError(s))
         } else {
             Ok(Self(s))
         }
