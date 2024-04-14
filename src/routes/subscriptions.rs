@@ -222,7 +222,7 @@ pub async fn send_confirmation_email(
 ) -> Result<(), reqwest::Error> {
     email_client
         .send_email(
-            new_subscriber.email,
+            &new_subscriber.email,
             "Welcome!",
             &template.html,
             &template.text,

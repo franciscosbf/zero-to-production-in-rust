@@ -9,6 +9,12 @@ pub enum SubscriberEmailError {
 #[derive(Debug)]
 pub struct SubscriberEmail(String);
 
+impl std::fmt::Display for SubscriberEmail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl SubscriberEmail {
     pub fn parse(s: String) -> Result<SubscriberEmail, SubscriberEmailError> {
         if validate_email(&s) {
