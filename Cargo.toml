@@ -37,6 +37,7 @@ lazy_static = "1.4.0"
 thiserror = "1"
 anyhow = "1.0"
 base64 = "0.22"
+argon2 = { version = "0.5", features = ["std"] }
 
 [dependencies.sqlx]
 version = "0.7"
@@ -51,7 +52,7 @@ features = [
 ]
 
 [dependencies.reqwest]
-version = "0.11"
+version = "0.12"
 default-features = false
 features = ["json", "rustls-tls"]
 

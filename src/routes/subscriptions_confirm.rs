@@ -1,6 +1,5 @@
-use actix_web::{web, HttpResponse, ResponseError};
+use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
 use anyhow::Context;
-use reqwest::StatusCode;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -38,7 +37,7 @@ impl std::fmt::Debug for SubscriptionConfirmationError {
 }
 
 impl ResponseError for SubscriptionConfirmationError {
-    fn status_code(&self) -> reqwest::StatusCode {
+    fn status_code(&self) -> StatusCode {
         match self {
             SubscriptionConfirmationError::ValidationError(_) => StatusCode::BAD_REQUEST,
             SubscriptionConfirmationError::MissingConfirmationError => StatusCode::UNAUTHORIZED,
