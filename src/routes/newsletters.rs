@@ -156,9 +156,9 @@ async fn validate_credentials(
 ) -> Result<uuid::Uuid, PublishError> {
     let mut user_id = None;
     let mut expected_password_hash = Secret::new(
-        "$argon2id$v=19$m=19000,t=2,p=1$\
-        eGpVeiBc1AnPWMyCUGSskw$\
-        rA8I9UrF5PzCDgqjqamKR1bAws/yLw9nvegXuS7QGr8"
+        "$argon2id$v=19$m=12288,t=3,p=1$\
+            mX5753E+aPsfXck0YnbNPw$\
+            cB4Uy6OGWwkHzjaESqhvc3jWP7ZEpHU9L2xZBhm/OOU"
             .to_string(),
     );
 

@@ -66,7 +66,7 @@ impl TestUser {
         let password_hash = Argon2::new(
             Algorithm::Argon2id,
             Version::V0x13,
-            Params::new(19000, 2, 1, None).unwrap(),
+            Params::new(12288, 3, 1, None).unwrap(),
         )
         .hash_password(self.password.as_bytes(), &salt)
         .unwrap()
