@@ -1,5 +1,7 @@
 mod admin_dashboard;
 mod change_password;
+mod collaborators;
+mod collaborators_registration;
 mod health_check;
 mod helpers;
 mod login;

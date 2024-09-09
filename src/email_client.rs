@@ -1,7 +1,7 @@
 use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
 
-use crate::domain::SubscriberEmail;
+use crate::domain::Email;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -16,14 +16,14 @@ struct SendEmailRequest<'a> {
 pub struct EmailClient {
     http_client: Client,
     base_url: reqwest::Url,
-    sender: SubscriberEmail,
+    sender: Email,
     authorization_token: Secret<String>,
 }
 
 impl EmailClient {
     pub fn new(
         base_url: reqwest::Url,
-        sender: SubscriberEmail,
+        sender: Email,
         authorization_token: Secret<String>,
         timeout: std::time::Duration,
     ) -> Self {
@@ -39,7 +39,7 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient: &SubscriberEmail,
+        recipient: &Email,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -82,7 +82,7 @@ mod test {
     use wiremock::matchers::{any, header, header_exists, method, path};
     use wiremock::{Match, Mock, MockServer, ResponseTemplate};
 
-    use crate::domain::SubscriberEmail;
+    use crate::domain::Email;
     use crate::email_client::EmailClient;
 
     struct SendEmailBodyMatcher;
@@ -107,8 +107,8 @@ mod test {
         Sentence(1..10).fake()
     }
 
-    fn email() -> SubscriberEmail {
-        SubscriberEmail::parse(SafeEmail().fake()).unwrap()
+    fn email() -> Email {
+        Email::parse(SafeEmail().fake()).unwrap()
     }
 
     fn email_client(base_url: String) -> EmailClient {

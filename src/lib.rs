@@ -7,4 +7,5 @@ pub mod session_state;
 pub mod startup;
 pub mod telemetry;
 pub mod template;
+pub mod user_role;
 pub mod util;

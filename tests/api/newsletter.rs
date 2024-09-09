@@ -4,9 +4,9 @@ use wiremock::{
     Mock, ResponseTemplate,
 };
 
-use crate::helpers::{spawn_app, ConfirmationLinks, TestApp};
+use crate::helpers::{spawn_app, Links, TestApp};
 
-async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
+async fn create_unconfirmed_subscriber(app: &TestApp) -> Links {
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     let _mock_guard = Mock::given(path("/email"))
@@ -28,7 +28,7 @@ async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
         .unwrap()
         .pop()
         .unwrap();
-    app.get_confirmation_links(email_request)
+    app.get_links(email_request)
 }
 
 async fn create_confirmed_subscriber(app: &TestApp) {

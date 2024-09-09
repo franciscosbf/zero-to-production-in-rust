@@ -30,7 +30,7 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_link = test_app.get_confirmation_links(email_request);
+    let confirmation_link = test_app.get_links(email_request);
 
     let response = reqwest::get(confirmation_link.html).await.unwrap();
 
@@ -50,7 +50,7 @@ async fn clicking_on_the_confirmation_link_confirms_subscriber() {
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_link = test_app.get_confirmation_links(email_request);
+    let confirmation_link = test_app.get_links(email_request);
 
     reqwest::get(confirmation_link.html)
         .await
@@ -81,7 +81,7 @@ async fn subscribe_returns_a_406_when_trying_to_subscribe_with_an_already_confir
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_link = test_app.get_confirmation_links(email_request);
+    let confirmation_link = test_app.get_links(email_request);
 
     reqwest::get(confirmation_link.html)
         .await
@@ -108,7 +108,7 @@ async fn clicking_on_the_confirmation_link_removes_subscription_token() {
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_link = test_app.get_confirmation_links(email_request);
+    let confirmation_link = test_app.get_links(email_request);
 
     reqwest::get(confirmation_link.html.clone())
         .await
@@ -152,7 +152,7 @@ async fn clicking_on_the_confirmation_link_more_than_once_returns_401() {
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let confirmation_link = test_app.get_confirmation_links(email_request);
+    let confirmation_link = test_app.get_links(email_request);
 
     reqwest::get(confirmation_link.html.clone())
         .await
@@ -179,7 +179,7 @@ async fn confirm_returns_a_400_when_token_is_invalid() {
 
     test_app.post_subscription(body.into()).await;
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
-    let mut confirmation_link = test_app.get_confirmation_links(email_request);
+    let mut confirmation_link = test_app.get_links(email_request);
 
     confirmation_link.html.set_query(Some(&query_token));
 

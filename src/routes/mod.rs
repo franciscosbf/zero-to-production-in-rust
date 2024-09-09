@@ -1,4 +1,5 @@
 mod admin;
+mod collaborator;
 mod health_check;
 mod home;
 mod login;
@@ -7,6 +8,7 @@ mod subscriptions;
 mod subscriptions_confirm;
 
 pub use admin::*;
+pub use collaborator::*;
 pub use health_check::*;
 pub use home::*;
 pub use login::*;

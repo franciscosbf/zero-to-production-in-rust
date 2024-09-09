@@ -8,14 +8,14 @@ use crate::domain::{SubscriptionToken, SubscriptionTokenError};
 use super::error_chain_fmt;
 
 #[derive(serde::Deserialize)]
-pub struct Parameters {
+pub struct SubscriptionConfirmationParameters {
     subscription_token: String,
 }
 
-impl TryFrom<Parameters> for SubscriptionToken {
+impl TryFrom<SubscriptionConfirmationParameters> for SubscriptionToken {
     type Error = SubscriptionTokenError;
 
-    fn try_from(value: Parameters) -> Result<Self, Self::Error> {
+    fn try_from(value: SubscriptionConfirmationParameters) -> Result<Self, Self::Error> {
         SubscriptionToken::parse(value.subscription_token)
     }
 }
@@ -92,7 +92,7 @@ pub async fn confirm_subscriber(
 
 #[tracing::instrument(name = "Confirm pending subscriber", skip(parameters, pool))]
 pub async fn confirm(
-    parameters: web::Query<Parameters>,
+    parameters: web::Query<SubscriptionConfirmationParameters>,
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, SubscriptionConfirmationError> {
     let subscription_token = parameters

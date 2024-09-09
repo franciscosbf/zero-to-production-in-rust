@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO subscriptions (id, email, name, subscribed_at, status)\n        VALUES ($1, $2, $3, $4, 'pending_confirmation')\n        -- idk a better way to this without using only one query...\n        ON CONFLICT (email) DO UPDATE SET status = subscriptions.status\n        RETURNING id, status\n        ",
+  "query": "\n        INSERT INTO subscriptions (id, email, name, subscribed_at, status)\n        VALUES ($1, $2, $3, $4, 'pending_confirmation')\n        -- idk a better way besides using only one query...\n        ON CONFLICT (email) DO UPDATE SET status = subscriptions.status\n        RETURNING id, status\n        ",
   "describe": {
     "columns": [
       {
@@ -27,5 +27,5 @@
       false
     ]
   },
-  "hash": "53654c478c44fd39dcdaf34ce03c2c0a182d6c0b2afe26205a79ba0b373f99d4"
+  "hash": "acf69f398e8d3e9791c60f78e66432cac9c75d56e333ddd04a737bb0f80cff72"
 }

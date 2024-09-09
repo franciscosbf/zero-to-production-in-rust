@@ -6,9 +6,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    domain::{
-        NewSubscriber, SubscriberEmail, SubscriberEmailError, SubscriberName, SubscriberNameError,
-    },
+    domain::{Email, EmailError, NewSubscriber, SubscriberName, SubscriberNameError},
     email_client::EmailClient,
     startup::ApplicationBaseUrl,
     template::{self, render_subscription_confirmation},
@@ -16,15 +14,15 @@ use crate::{
 
 use super::error_chain_fmt;
 
-pub struct StoreTokenError(sqlx::Error);
+pub struct StoreSubscriptionTokenError(sqlx::Error);
 
-impl std::error::Error for StoreTokenError {
+impl std::error::Error for StoreSubscriptionTokenError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.0)
     }
 }
 
-impl std::fmt::Display for StoreTokenError {
+impl std::fmt::Display for StoreSubscriptionTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -33,23 +31,23 @@ impl std::fmt::Display for StoreTokenError {
     }
 }
 
-impl std::fmt::Debug for StoreTokenError {
+impl std::fmt::Debug for StoreSubscriptionTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         error_chain_fmt(self, f)
     }
 }
 
-impl actix_web::ResponseError for StoreTokenError {}
+impl actix_web::ResponseError for StoreSubscriptionTokenError {}
 
 #[derive(thiserror::Error)]
-pub enum ParseError {
+pub enum SubscriptionParseError {
     #[error(transparent)]
     InvalidName(SubscriberNameError),
     #[error(transparent)]
-    InvalidEmail(SubscriberEmailError),
+    InvalidEmail(EmailError),
 }
 
-impl std::fmt::Debug for ParseError {
+impl std::fmt::Debug for SubscriptionParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         error_chain_fmt(self, f)
     }
@@ -58,7 +56,7 @@ impl std::fmt::Debug for ParseError {
 #[derive(thiserror::Error)]
 pub enum SubscribeError {
     #[error("{0}")]
-    ValidationError(ParseError),
+    ValidationError(SubscriptionParseError),
     #[error("Duplicated subscriber")]
     DuplicatedSubscriberError,
     #[error(transparent)]
@@ -82,17 +80,18 @@ impl ResponseError for SubscribeError {
 }
 
 #[derive(serde::Deserialize)]
-pub struct FormData {
+pub struct SubscriptionFormData {
     email: String,
     name: String,
 }
 
-impl TryFrom<FormData> for NewSubscriber {
-    type Error = ParseError;
+impl TryFrom<SubscriptionFormData> for NewSubscriber {
+    type Error = SubscriptionParseError;
 
-    fn try_from(value: FormData) -> Result<Self, Self::Error> {
-        let email = SubscriberEmail::parse(value.email).map_err(ParseError::InvalidEmail)?;
-        let name = SubscriberName::parse(value.name).map_err(ParseError::InvalidName)?;
+    fn try_from(value: SubscriptionFormData) -> Result<Self, Self::Error> {
+        let email = Email::parse(value.email).map_err(SubscriptionParseError::InvalidEmail)?;
+        let name =
+            SubscriberName::parse(value.name).map_err(SubscriptionParseError::InvalidName)?;
 
         Ok(NewSubscriber { email, name })
     }
@@ -115,7 +114,7 @@ pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
     subscription_token: &str,
-) -> Result<(), StoreTokenError> {
+) -> Result<(), StoreSubscriptionTokenError> {
     sqlx::query!(
         r#"INSERT INTO subscription_tokens (subscription_token, subscriber_id)
         VALUES ($1, $2)"#,
@@ -124,7 +123,7 @@ pub async fn store_token(
     )
     .execute(&mut **transaction)
     .await
-    .map_err(StoreTokenError)?;
+    .map_err(StoreSubscriptionTokenError)?;
 
     Ok(())
 }
@@ -150,7 +149,7 @@ pub async fn insert_susbscriber(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
         VALUES ($1, $2, $3, $4, 'pending_confirmation')
-        -- idk a better way to this without using only one query...
+        -- idk a better way besides using only one query...
         ON CONFLICT (email) DO UPDATE SET status = subscriptions.status
         RETURNING id, status
         "#,
@@ -214,7 +213,7 @@ fn build_confirmation_email_template(
     name = "Send a confirmation email to a new subscriber",
     skip(email_client, new_subscriber, template)
 )]
-pub async fn send_confirmation_email(
+async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
     template: template::SubcriptionConfirmation,
@@ -238,7 +237,7 @@ pub async fn send_confirmation_email(
     )
 )]
 pub async fn subscribe(
-    form: web::Form<FormData>,
+    form: web::Form<SubscriptionFormData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,

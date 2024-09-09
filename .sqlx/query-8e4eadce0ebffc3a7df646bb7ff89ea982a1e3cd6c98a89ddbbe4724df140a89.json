@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM invitation_tokens\n        WHERE invitation_token = $1 AND\n            validation_code = $2\n        RETURNING 1 as contained\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contained",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8e4eadce0ebffc3a7df646bb7ff89ea982a1e3cd6c98a89ddbbe4724df140a89"
+}

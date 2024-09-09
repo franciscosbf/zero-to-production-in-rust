@@ -6,11 +6,13 @@ use actix_web::{
 use actix_web_flash_messages::FlashMessage;
 use secrecy::Secret;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::{
     authentication::{validate_credentials, AuthError, Credentials},
     routes::error_chain_fmt,
     session_state::TypedSession,
+    user_role::UserRole,
 };
 
 #[derive(serde::Deserialize)]
@@ -53,6 +55,24 @@ fn login_redirect(e: LoginError) -> InternalError<LoginError> {
 }
 
 #[tracing::instrument(
+    skip(pool),
+    fields(user_id=tracing::field::Empty)
+)]
+async fn get_user_role(user_id: &Uuid, pool: &PgPool) -> Result<UserRole, sqlx::Error> {
+    sqlx::query!(
+        r#"
+        SELECT role as "role!: UserRole"
+        FROM users
+        WHERE user_id = $1
+        "#,
+        user_id
+    )
+    .fetch_one(pool)
+    .await
+    .map(|record| record.role)
+}
+
+#[tracing::instrument(
     skip(form, pool, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
@@ -68,11 +88,18 @@ pub async fn login(
 
     match validate_credentials(credentials, &pool).await {
         Ok(user_id) => {
+            let user_role = get_user_role(&user_id, &pool)
+                .await
+                .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
+
             tracing::Span::current().record("user_id", tracing::field::display(&user_id));
 
             session.renew();
             session
                 .insert_user_id(user_id)
+                .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
+            session
+                .insert_user_role(user_role)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
 
             Ok(HttpResponse::SeeOther()

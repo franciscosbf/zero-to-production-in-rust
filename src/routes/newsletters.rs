@@ -149,7 +149,7 @@ pub async fn publish_newsletter(
             Ok(subscriber) => {
                 email_client
                     .send_email(
-                        &subscriber.email,
+                        subscriber.email.as_ref(),
                         &body.title,
                         &body.content.html,
                         &body.content.text,

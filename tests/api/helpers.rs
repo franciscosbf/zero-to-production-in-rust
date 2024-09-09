@@ -4,6 +4,7 @@ use newsletter::{
     configuration::{get_configuration, DatabaseSettings},
     startup::{get_connection_pool, Application},
     telemetry::{get_subscriber, init_subscriber},
+    user_role::UserRole,
 };
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
@@ -41,7 +42,7 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
     connection_pool
 }
 
-pub struct ConfirmationLinks {
+pub struct Links {
     pub html: reqwest::Url,
     pub plain_text: reqwest::Url,
 }
@@ -61,7 +62,7 @@ impl TestUser {
         }
     }
 
-    async fn store(&self, pool: &PgPool) {
+    async fn store(&self, pool: &PgPool, role: UserRole) {
         let salt = SaltString::generate(&mut rand::thread_rng());
         let password_hash = Argon2::new(
             Algorithm::Argon2id,
@@ -74,12 +75,13 @@ impl TestUser {
 
         sqlx::query!(
             r#"
-            INSERT INTO users (user_id, username, password_hash)
-            VALUES ($1, $2, $3)
+            INSERT INTO users (user_id, username, password_hash, role)
+            VALUES ($1, $2, $3, $4)
             "#,
             self.user_id,
             self.username,
-            password_hash
+            password_hash,
+            role as UserRole,
         )
         .execute(pool)
         .await
@@ -117,7 +119,7 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
-    pub fn get_confirmation_links(&self, email_request: &wiremock::Request) -> ConfirmationLinks {
+    pub fn get_links(&self, email_request: &wiremock::Request) -> Links {
         let body = email_request.body_json::<serde_json::Value>().unwrap();
 
         let get_link = |s: &str| {
@@ -129,19 +131,19 @@ impl TestApp {
             assert_eq!(links.len(), 1);
 
             let raw_link = links[0].as_str();
-            let mut confirmation_link = Url::parse(raw_link).unwrap();
+            let mut link = Url::parse(raw_link).unwrap();
 
-            assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+            assert_eq!(link.host_str().unwrap(), "127.0.0.1");
 
-            confirmation_link.set_port(Some(self.port)).unwrap();
+            link.set_port(Some(self.port)).unwrap();
 
-            confirmation_link
+            link
         };
 
         let html = get_link(body["HtmlBody"].as_str().unwrap());
         let plain_text = get_link(body["TextBody"].as_str().unwrap());
 
-        ConfirmationLinks { html, plain_text }
+        Links { html, plain_text }
     }
 
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
@@ -210,6 +212,65 @@ impl TestApp {
             .await
             .expect("Failed to execute request.")
     }
+
+    pub async fn invite_collaborator<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/admin/collaborator", &self.address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn extract_invitation_token(&self) -> String {
+        let email_request = &self.email_server.received_requests().await.unwrap()[0];
+        let links = self.get_links(email_request);
+        let (_, invitation_token) = links.html.query_pairs().next().unwrap();
+
+        invitation_token.into_owned()
+    }
+
+    pub async fn get_collaborator_registration(&self, invitation_token: &str) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/collaborator", &self.address))
+            .query(&[("invitation_token", invitation_token)])
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_collaborator_registration_html(&self, invitation_token: &str) -> String {
+        self.get_collaborator_registration(invitation_token)
+            .await
+            .text()
+            .await
+            .unwrap()
+    }
+
+    pub async fn register_collaborator<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/collaborator/register", &self.address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn create_collaborator(&self) -> TestUser {
+        let collaborator = TestUser::generate();
+
+        collaborator
+            .store(&self.db_pool, UserRole::Collaborator)
+            .await;
+
+        collaborator
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -256,7 +317,10 @@ pub async fn spawn_app() -> TestApp {
         api_client,
     };
 
-    test_app.test_user.store(&test_app.db_pool).await;
+    test_app
+        .test_user
+        .store(&test_app.db_pool, UserRole::Admin)
+        .await;
 
     test_app
 }
@@ -264,4 +328,17 @@ pub async fn spawn_app() -> TestApp {
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
     assert_eq!(response.status().as_u16(), 303);
     assert_eq!(response.headers().get("location").unwrap(), location);
+}
+
+#[derive(serde::Deserialize)]
+pub struct InvitationResponse {
+    pub validation_code: String,
+}
+
+pub async fn extract_validation_code(response: reqwest::Response) -> String {
+    response
+        .json::<InvitationResponse>()
+        .await
+        .expect("Failed to deserialize validation_code from response")
+        .validation_code
 }

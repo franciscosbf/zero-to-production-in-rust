@@ -13,7 +13,8 @@ use crate::{
     email_client::EmailClient,
     routes::{
         admin_dashboard, change_password, change_password_form, confirm, health_check, home,
-        log_out, login, login_form, publish_newsletter, subscribe,
+        invite_collaborator, log_out, login, login_form, publish_newsletter, register_collaborator,
+        register_collaborator_form, subscribe,
     },
 };
 
@@ -65,7 +66,13 @@ pub async fn run(
                     .route("/dashboard", web::get().to(admin_dashboard))
                     .route("/password", web::get().to(change_password_form))
                     .route("/password", web::post().to(change_password))
-                    .route("/logout", web::post().to(log_out)),
+                    .route("/logout", web::post().to(log_out))
+                    .route("/collaborator", web::post().to(invite_collaborator)),
+            )
+            .route("/collaborator", web::get().to(register_collaborator_form))
+            .route(
+                "/collaborator/register",
+                web::post().to(register_collaborator),
             )
     })
     .listen(listener)?
