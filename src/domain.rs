@@ -19,4 +19,3 @@ pub use subscriber_name::{SubscriberName, SubscriberNameError};
 pub use subscription_token::{SubscriptionToken, SubscriptionTokenError};
 pub use token::{Token, TokenError};
 pub use validation_code::{ValidationCode, ValidationCodeError};
-
