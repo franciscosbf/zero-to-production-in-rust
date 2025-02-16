@@ -89,7 +89,7 @@ mod test {
 
     impl Match for SendEmailBodyMatcher {
         fn matches(&self, request: &wiremock::Request) -> bool {
-            serde_json::from_slice::<serde_json::Value>(&request.body).map_or(false, |body| {
+            serde_json::from_slice::<serde_json::Value>(&request.body).is_ok_and(|body| {
                 body.get("From").is_some()
                     && body.get("To").is_some()
                     && body.get("Subject").is_some()
