@@ -5,6 +5,7 @@ use actix_web::{
     },
     web, HttpResponse, ResponseError,
 };
+use actix_web_flash_messages::FlashMessage;
 use anyhow::Context;
 use sqlx::PgPool;
 
@@ -49,8 +50,8 @@ impl ResponseError for PublishError {
 #[derive(serde::Deserialize)]
 pub struct FormData {
     title: String,
-    content_html: String,
-    content_text: String,
+    html_content: String,
+    text_content: String,
 }
 
 struct ConfirmedSubscriber {
@@ -101,8 +102,8 @@ pub async fn publish_newsletter(
                     .send_email(
                         subscriber.email.as_ref(),
                         &form.0.title,
-                        &form.0.content_html,
-                        &form.0.content_text,
+                        &form.0.html_content,
+                        &form.0.text_content,
                     )
                     .await
                     .with_context(|| {
@@ -118,6 +119,8 @@ pub async fn publish_newsletter(
             }
         }
     }
+
+    FlashMessage::info("THe newsletter issue has been published!").send();
 
     Ok(HttpResponse::Ok().finish())
 }

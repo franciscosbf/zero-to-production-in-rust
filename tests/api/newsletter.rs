@@ -58,8 +58,8 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
-        "content_text": "New body as plain text",
-        "content_html": "<p>Newsletter body as HTML</p>",
+        "text_content": "New body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
     });
     let response = app.post_newsletters(&newsletter_request_body).await;
 
@@ -85,8 +85,8 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
 
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
-        "content_text": "New body as plain text",
-        "content_html": "<p>Newsletter body as HTML</p>",
+        "text_content": "New body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
     });
     let response = app.post_newsletters(&newsletter_request_body).await;
 
@@ -99,8 +99,8 @@ async fn newsletters_returns_400_for_invalid_data() {
     let test_case = vec![
         (
             serde_json::json!({
-                "content_text": "Newsletter body as plain text",
-                "content_html": "<p>Newsletter body as HTML</p>"
+                "text_content": "Newsletter body as plain text",
+                "html_content": "<p>Newsletter body as HTML</p>"
             }),
             "missing title",
         ),
@@ -134,8 +134,8 @@ async fn requests_missing_authorization_are_rejected() {
 
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
-        "content_text": "New body as plain text",
-        "content_html": "<p>Newsletter body as HTML</p>",
+        "text_content": "New body as plain text",
+        "html_content": "<p>Newsletter body as HTML</p>",
     });
     let response = app.post_newsletters(&newsletter_request_body).await;
 
