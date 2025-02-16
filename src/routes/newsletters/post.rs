@@ -49,8 +49,8 @@ impl ResponseError for PublishError {
 #[derive(serde::Deserialize)]
 pub struct FormData {
     title: String,
-    html: String,
-    text: String,
+    content_html: String,
+    content_text: String,
 }
 
 struct ConfirmedSubscriber {
@@ -101,8 +101,8 @@ pub async fn publish_newsletter(
                     .send_email(
                         subscriber.email.as_ref(),
                         &form.0.title,
-                        &form.0.html,
-                        &form.0.text,
+                        &form.0.content_html,
+                        &form.0.content_text,
                     )
                     .await
                     .with_context(|| {

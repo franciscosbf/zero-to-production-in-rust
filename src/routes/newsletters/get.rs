@@ -33,7 +33,7 @@ pub async fn publish_newsletter_form(
         <label>Plain text content:<br>
             <textarea
                 placeholder="Enter the content in plain text"
-                name="text"
+                name="content_text"
                 rows="20"
                 cols="50"
             ></textarea>
@@ -42,7 +42,7 @@ pub async fn publish_newsletter_form(
         <label>HTML content:<br>
             <textarea
                 placeholder="Enter the content in HTML format"
-                name="html"
+                name="contet_html"
                 rows="20"
                 cols="50"
             ></textarea>
