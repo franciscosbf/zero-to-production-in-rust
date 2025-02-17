@@ -43,12 +43,7 @@ async fn create_confirmed_subscriber(app: &TestApp) {
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
     let app = spawn_app().await;
     create_unconfirmed_subscriber(&app).await;
-
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
+    app.test_user.login(&app).await;
 
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200))
@@ -70,12 +65,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 async fn newsletters_are_delivered_to_confirmed_subscribers() {
     let app = spawn_app().await;
     create_confirmed_subscriber(&app).await;
-
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
+    app.test_user.login(&app).await;
 
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200))
@@ -109,12 +99,7 @@ async fn newsletters_returns_400_for_invalid_data() {
             "missing content",
         ),
     ];
-
-    app.post_login(&serde_json::json!({
-        "username": &app.test_user.username,
-        "password": &app.test_user.password,
-    }))
-    .await;
+    app.test_user.login(&app).await;
 
     for (invalid_body, error_message) in test_case {
         let response = app.post_newsletters(&invalid_body).await;

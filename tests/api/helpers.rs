@@ -87,6 +87,14 @@ impl TestUser {
         .await
         .expect("Failed to create test users.");
     }
+
+    pub async fn login(&self, app: &TestApp) {
+        app.post_login(&serde_json::json!({
+            "username": &app.test_user.username,
+            "password": &app.test_user.password,
+        }))
+        .await;
+    }
 }
 
 pub struct TestApp {
