@@ -1,61 +1,33 @@
 use actix_web::{
-    http::{
-        header::{self, HeaderValue},
-        StatusCode,
-    },
-    web, HttpResponse, ResponseError,
+    web::{self, ReqData},
+    HttpResponse,
 };
 use actix_web_flash_messages::FlashMessage;
 use anyhow::Context;
 use sqlx::PgPool;
 
-use crate::{domain::SubscriberEmail, email_client::EmailClient};
-
-use crate::routes::error_chain_fmt;
-
-#[derive(thiserror::Error)]
-pub enum PublishError {
-    #[error("Authentication failed")]
-    AuthError(#[source] anyhow::Error),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl std::fmt::Debug for PublishError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
-
-impl ResponseError for PublishError {
-    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
-        match self {
-            PublishError::UnexpectedError(_) => {
-                HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-            PublishError::AuthError(_) => {
-                let mut response = HttpResponse::new(StatusCode::UNAUTHORIZED);
-                let header_value = HeaderValue::from_str(r#"Basic realm="publish""#).unwrap();
-
-                response
-                    .headers_mut()
-                    .insert(header::WWW_AUTHENTICATE, header_value);
-
-                response
-            }
-        }
-    }
-}
+use crate::{
+    authentication::UserId,
+    domain::SubscriberEmail,
+    email_client::EmailClient,
+    idempotency::{save_response, try_processing, IdempotencyKey, NextAction},
+    utils::{e400, e500, see_other},
+};
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
     title: String,
     html_content: String,
     text_content: String,
+    idempotency_key: String,
 }
 
 struct ConfirmedSubscriber {
     email: SubscriberEmail,
+}
+
+fn success_message() -> FlashMessage {
+    FlashMessage::info("The newsletter issue has been published!")
 }
 
 #[tracing::instrument(name = "Get confirmed subscribers", skip(pool))]
@@ -92,8 +64,28 @@ pub async fn publish_newsletter(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
-) -> Result<HttpResponse, PublishError> {
-    let subscribers = get_confirmed_subscribers(&pool).await?;
+    user_id: ReqData<UserId>,
+) -> Result<HttpResponse, actix_web::Error> {
+    let FormData {
+        title,
+        html_content,
+        text_content,
+        idempotency_key,
+    } = form.0;
+    let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
+
+    let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
+    let transaction = match try_processing(&pool, &idempotency_key, **user_id)
+        .await
+        .map_err(e500)?
+    {
+        NextAction::StartProcessing(transaction) => transaction,
+        NextAction::ReturnSavedResponse(saved_response) => {
+            success_message().send();
+
+            return Ok(saved_response);
+        }
+    };
 
     for subscriber in subscribers {
         match subscriber {
@@ -101,14 +93,15 @@ pub async fn publish_newsletter(
                 email_client
                     .send_email(
                         subscriber.email.as_ref(),
-                        &form.0.title,
-                        &form.0.html_content,
-                        &form.0.text_content,
+                        &title,
+                        &html_content,
+                        &text_content,
                     )
                     .await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)
-                    })?;
+                    })
+                    .map_err(e500)?;
             }
             Err(error) => {
                 tracing::warn!(
@@ -120,7 +113,11 @@ pub async fn publish_newsletter(
         }
     }
 
-    FlashMessage::info("THe newsletter issue has been published!").send();
+    success_message().send();
 
-    Ok(HttpResponse::Ok().finish())
+    let response = see_other("/admin/newsletters");
+    let response = save_response(transaction, &idempotency_key, **user_id, response)
+        .await
+        .map_err(e500)?;
+    Ok(response)
 }

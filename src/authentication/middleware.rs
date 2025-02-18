@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     session_state::TypedSession,
-    util::{e500, see_other},
+    utils::{e500, see_other},
 };
 
 #[derive(Copy, Clone, Debug)]

@@ -9,7 +9,7 @@ use crate::{
     authentication::compute_password_hash,
     domain::{InvitationToken, InvitationTokenError, ValidationCode, ValidationCodeError},
     routes::error_chain_fmt,
-    util::see_other,
+    utils::see_other,
 };
 
 #[derive(serde::Deserialize)]

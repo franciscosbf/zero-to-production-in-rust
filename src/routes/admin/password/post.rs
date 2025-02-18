@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use crate::{
     authentication::{self, validate_credentials, AuthError, Credentials, UserId},
     routes::admin::dashboard::get_username,
-    util::{e500, see_other},
+    utils::{e500, see_other},
 };
 
 #[derive(serde::Deserialize)]
